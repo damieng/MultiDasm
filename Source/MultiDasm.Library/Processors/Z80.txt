@@ -1,7 +1,9 @@
 Zilog Z80
-Jump: JP, JR, DJNZ, RST
-Call: CALL
-Return: RET
+Jump Maybe: JP NZ,JP Z,JP NC,JP C,JP PO,JP PE,JP P,JP M,JR NZ,JR Z,JR NC,JR C,DJNZ
+Jump Always: JP,JR
+Call: CALL,RST
+Return Maybe: RET NZ,RET Z,RET NC,RET C,RET PE,RET PO,RET P,RET M
+Return Always: RET
 
 #
 00	NOP

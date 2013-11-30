@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 
 namespace MultiDasm.Library
 {
@@ -7,12 +8,15 @@ namespace MultiDasm.Library
         Regular,
         InstructionSwitch,
         RegisterSwitch,
-        Jump,
+        JumpMaybe,
+        JumpAlways,
         Call,
-        Return,
+        ReturnMaybe,
+        ReturnAlways,
         Invalid
     }
 
+    [DebuggerDisplay("{mnemonic}")]
     public class Opcode
     {
         private readonly Byte code;

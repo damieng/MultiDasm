@@ -32,7 +32,7 @@ namespace MultiDasm.Library
                         line = reader.ReadLine();
                         if (!String.IsNullOrEmpty(line)) {
                             var parts = line.Split(':');
-                            specials.Add((OpcodeType)Enum.Parse(typeof(OpcodeType), parts[0]), parts[1].Split(',').Select(p => p.Trim()).ToList());
+                            specials.Add((OpcodeType)Enum.Parse(typeof(OpcodeType), parts[0].Replace(" ","")), parts[1].Split(',').Select(p => p.Trim()).ToList());
                         }
                     } while (!String.IsNullOrWhiteSpace(line));
 
