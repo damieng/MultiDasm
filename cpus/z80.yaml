@@ -1,0 +1,449 @@
+cpu:
+  name: "Zilog Z80"
+  endian: little
+
+register_sets:
+  r8:     [B, C, D, E, H, L, "(HL)", A]
+  r16:    [BC, DE, HL, SP]
+  r16_af: [BC, DE, HL, AF]
+  cc:     [NZ, Z, NC, C, PO, PE, P, M]
+
+# Template placeholders:
+#   n    = 8-bit immediate           → $XX
+#   nn   = 16-bit immediate/address  → $XXXX
+#   e    = relative offset           → target $XXXX
+#   +d   = signed displacement       → +N or -N
+#   {r8:B-B}  = register from set, encoded in bits B-B
+#   {bit:B-B} = literal bit number 0-7
+#
+# Flow types: jump, cond_branch, call, cond_call, return, cond_return, indirect
+
+opcodes:
+  # --- 0x ---
+  0x00: ["NOP", 0]
+  0x01: ["LD BC,nn", 2]
+  0x02: ["LD (BC),A", 0]
+  0x03: ["INC BC", 0]
+  0x04: ["INC B", 0]
+  0x05: ["DEC B", 0]
+  0x06: ["LD B,n", 1]
+  0x07: ["RLCA", 0]
+  0x08: ["EX AF,AF'", 0]
+  0x09: ["ADD HL,BC", 0]
+  0x0A: ["LD A,(BC)", 0]
+  0x0B: ["DEC BC", 0]
+  0x0C: ["INC C", 0]
+  0x0D: ["DEC C", 0]
+  0x0E: ["LD C,n", 1]
+  0x0F: ["RRCA", 0]
+  # --- 1x ---
+  0x10: ["DJNZ e", 1, cond_branch]
+  0x11: ["LD DE,nn", 2]
+  0x12: ["LD (DE),A", 0]
+  0x13: ["INC DE", 0]
+  0x14: ["INC D", 0]
+  0x15: ["DEC D", 0]
+  0x16: ["LD D,n", 1]
+  0x17: ["RLA", 0]
+  0x18: ["JR e", 1, jump]
+  0x19: ["ADD HL,DE", 0]
+  0x1A: ["LD A,(DE)", 0]
+  0x1B: ["DEC DE", 0]
+  0x1C: ["INC E", 0]
+  0x1D: ["DEC E", 0]
+  0x1E: ["LD E,n", 1]
+  0x1F: ["RRA", 0]
+  # --- 2x ---
+  0x20: ["JR NZ,e", 1, cond_branch]
+  0x21: ["LD HL,nn", 2]
+  0x22: ["LD (nn),HL", 2]
+  0x23: ["INC HL", 0]
+  0x24: ["INC H", 0]
+  0x25: ["DEC H", 0]
+  0x26: ["LD H,n", 1]
+  0x27: ["DAA", 0]
+  0x28: ["JR Z,e", 1, cond_branch]
+  0x29: ["ADD HL,HL", 0]
+  0x2A: ["LD HL,(nn)", 2]
+  0x2B: ["DEC HL", 0]
+  0x2C: ["INC L", 0]
+  0x2D: ["DEC L", 0]
+  0x2E: ["LD L,n", 1]
+  0x2F: ["CPL", 0]
+  # --- 3x ---
+  0x30: ["JR NC,e", 1, cond_branch]
+  0x31: ["LD SP,nn", 2]
+  0x32: ["LD (nn),A", 2]
+  0x33: ["INC SP", 0]
+  0x34: ["INC (HL)", 0]
+  0x35: ["DEC (HL)", 0]
+  0x36: ["LD (HL),n", 1]
+  0x37: ["SCF", 0]
+  0x38: ["JR C,e", 1, cond_branch]
+  0x39: ["ADD HL,SP", 0]
+  0x3A: ["LD A,(nn)", 2]
+  0x3B: ["DEC SP", 0]
+  0x3C: ["INC A", 0]
+  0x3D: ["DEC A", 0]
+  0x3E: ["LD A,n", 1]
+  0x3F: ["CCF", 0]
+  # --- 76 (in the pattern gap) ---
+  0x76: ["HALT", 0]
+  # --- Cx-Fx control flow ---
+  0xC0: ["RET NZ", 0, cond_return]
+  0xC1: ["POP BC", 0]
+  0xC2: ["JP NZ,nn", 2, cond_branch]
+  0xC3: ["JP nn", 2, jump]
+  0xC4: ["CALL NZ,nn", 2, cond_call]
+  0xC5: ["PUSH BC", 0]
+  0xC6: ["ADD A,n", 1]
+  0xC7: ["RST $00", 0]
+  0xC8: ["RET Z", 0, cond_return]
+  0xC9: ["RET", 0, return]
+  0xCA: ["JP Z,nn", 2, cond_branch]
+  0xCC: ["CALL Z,nn", 2, cond_call]
+  0xCD: ["CALL nn", 2, call]
+  0xCE: ["ADC A,n", 1]
+  0xCF: ["RST $08", 0]
+  0xD0: ["RET NC", 0, cond_return]
+  0xD1: ["POP DE", 0]
+  0xD2: ["JP NC,nn", 2, cond_branch]
+  0xD3: ["OUT (n),A", 1]
+  0xD4: ["CALL NC,nn", 2, cond_call]
+  0xD5: ["PUSH DE", 0]
+  0xD6: ["SUB n", 1]
+  0xD7: ["RST $10", 0]
+  0xD8: ["RET C", 0, cond_return]
+  0xD9: ["EXX", 0]
+  0xDA: ["JP C,nn", 2, cond_branch]
+  0xDB: ["IN A,(n)", 1]
+  0xDC: ["CALL C,nn", 2, cond_call]
+  0xDE: ["SBC A,n", 1]
+  0xDF: ["RST $18", 0]
+  0xE0: ["RET PO", 0, cond_return]
+  0xE1: ["POP HL", 0]
+  0xE2: ["JP PO,nn", 2, cond_branch]
+  0xE3: ["EX (SP),HL", 0]
+  0xE4: ["CALL PO,nn", 2, cond_call]
+  0xE5: ["PUSH HL", 0]
+  0xE6: ["AND n", 1]
+  0xE7: ["RST $20", 0]
+  0xE8: ["RET PE", 0, cond_return]
+  0xE9: ["JP (HL)", 0, indirect]
+  0xEA: ["JP PE,nn", 2, cond_branch]
+  0xEB: ["EX DE,HL", 0]
+  0xEC: ["CALL PE,nn", 2, cond_call]
+  0xEE: ["XOR n", 1]
+  0xEF: ["RST $28", 0]
+  0xF0: ["RET P", 0, cond_return]
+  0xF1: ["POP AF", 0]
+  0xF2: ["JP P,nn", 2, cond_branch]
+  0xF3: ["DI", 0]
+  0xF4: ["CALL P,nn", 2, cond_call]
+  0xF5: ["PUSH AF", 0]
+  0xF6: ["OR n", 1]
+  0xF7: ["RST $30", 0]
+  0xF8: ["RET M", 0, cond_return]
+  0xF9: ["LD SP,HL", 0]
+  0xFA: ["JP M,nn", 2, cond_branch]
+  0xFB: ["EI", 0]
+  0xFC: ["CALL M,nn", 2, cond_call]
+  0xFE: ["CP n", 1]
+  0xFF: ["RST $38", 0]
+
+# LD r,r' and ALU blocks via patterns
+patterns:
+  - range: [0x40, 0x7F]
+    template: "LD {r8:5-3},{r8:2-0}"
+    operand_bytes: 0
+    exclude:
+      0x76: ["HALT", 0]
+  - range: [0x80, 0x87]
+    template: "ADD A,{r8:2-0}"
+    operand_bytes: 0
+  - range: [0x88, 0x8F]
+    template: "ADC A,{r8:2-0}"
+    operand_bytes: 0
+  - range: [0x90, 0x97]
+    template: "SUB {r8:2-0}"
+    operand_bytes: 0
+  - range: [0x98, 0x9F]
+    template: "SBC A,{r8:2-0}"
+    operand_bytes: 0
+  - range: [0xA0, 0xA7]
+    template: "AND {r8:2-0}"
+    operand_bytes: 0
+  - range: [0xA8, 0xAF]
+    template: "XOR {r8:2-0}"
+    operand_bytes: 0
+  - range: [0xB0, 0xB7]
+    template: "OR {r8:2-0}"
+    operand_bytes: 0
+  - range: [0xB8, 0xBF]
+    template: "CP {r8:2-0}"
+    operand_bytes: 0
+
+# --- Prefix groups ---
+prefix_groups:
+  CB:
+    prefix: [0xCB]
+    has_displacement: false
+    patterns:
+      - range: [0x00, 0x07]
+        template: "RLC {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x08, 0x0F]
+        template: "RRC {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x10, 0x17]
+        template: "RL {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x18, 0x1F]
+        template: "RR {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x20, 0x27]
+        template: "SLA {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x28, 0x2F]
+        template: "SRA {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x30, 0x37]
+        template: "SLL {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x38, 0x3F]
+        template: "SRL {r8:2-0}"
+        operand_bytes: 0
+      - range: [0x40, 0x7F]
+        template: "BIT {bit:5-3},{r8:2-0}"
+        operand_bytes: 0
+      - range: [0x80, 0xBF]
+        template: "RES {bit:5-3},{r8:2-0}"
+        operand_bytes: 0
+      - range: [0xC0, 0xFF]
+        template: "SET {bit:5-3},{r8:2-0}"
+        operand_bytes: 0
+
+  ED:
+    prefix: [0xED]
+    has_displacement: false
+    opcodes:
+      0x40: ["IN B,(C)", 0]
+      0x41: ["OUT (C),B", 0]
+      0x42: ["SBC HL,BC", 0]
+      0x43: ["LD (nn),BC", 2]
+      0x44: ["NEG", 0]
+      0x45: ["RETN", 0, return]
+      0x46: ["IM 0", 0]
+      0x47: ["LD I,A", 0]
+      0x48: ["IN C,(C)", 0]
+      0x49: ["OUT (C),C", 0]
+      0x4A: ["ADC HL,BC", 0]
+      0x4B: ["LD BC,(nn)", 2]
+      0x4D: ["RETI", 0, return]
+      0x4F: ["LD R,A", 0]
+      0x50: ["IN D,(C)", 0]
+      0x51: ["OUT (C),D", 0]
+      0x52: ["SBC HL,DE", 0]
+      0x53: ["LD (nn),DE", 2]
+      0x56: ["IM 1", 0]
+      0x57: ["LD A,I", 0]
+      0x58: ["IN E,(C)", 0]
+      0x59: ["OUT (C),E", 0]
+      0x5A: ["ADC HL,DE", 0]
+      0x5B: ["LD DE,(nn)", 2]
+      0x5E: ["IM 2", 0]
+      0x5F: ["LD A,R", 0]
+      0x60: ["IN H,(C)", 0]
+      0x61: ["OUT (C),H", 0]
+      0x62: ["SBC HL,HL", 0]
+      0x63: ["LD (nn),HL", 2]
+      0x67: ["RRD", 0]
+      0x68: ["IN L,(C)", 0]
+      0x69: ["OUT (C),L", 0]
+      0x6A: ["ADC HL,HL", 0]
+      0x6B: ["LD HL,(nn)", 2]
+      0x6F: ["RLD", 0]
+      0x72: ["SBC HL,SP", 0]
+      0x73: ["LD (nn),SP", 2]
+      0x78: ["IN A,(C)", 0]
+      0x79: ["OUT (C),A", 0]
+      0x7A: ["ADC HL,SP", 0]
+      0x7B: ["LD SP,(nn)", 2]
+      0xA0: ["LDI", 0]
+      0xA1: ["CPI", 0]
+      0xA2: ["INI", 0]
+      0xA3: ["OUTI", 0]
+      0xA8: ["LDD", 0]
+      0xA9: ["CPD", 0]
+      0xAA: ["IND", 0]
+      0xAB: ["OUTD", 0]
+      0xB0: ["LDIR", 0]
+      0xB1: ["CPIR", 0]
+      0xB2: ["INIR", 0]
+      0xB3: ["OTIR", 0]
+      0xB8: ["LDDR", 0]
+      0xB9: ["CPDR", 0]
+      0xBA: ["INDR", 0]
+      0xBB: ["OTDR", 0]
+
+  DD:
+    prefix: [0xDD]
+    has_displacement: false
+    opcodes:
+      0x09: ["ADD IX,BC", 0]
+      0x19: ["ADD IX,DE", 0]
+      0x21: ["LD IX,nn", 2]
+      0x22: ["LD (nn),IX", 2]
+      0x23: ["INC IX", 0]
+      0x29: ["ADD IX,IX", 0]
+      0x2A: ["LD IX,(nn)", 2]
+      0x2B: ["DEC IX", 0]
+      0x34: ["INC (IX+d)", 1]
+      0x35: ["DEC (IX+d)", 1]
+      0x36: ["LD (IX+d),n", 2]
+      0x39: ["ADD IX,SP", 0]
+      0x46: ["LD B,(IX+d)", 1]
+      0x4E: ["LD C,(IX+d)", 1]
+      0x56: ["LD D,(IX+d)", 1]
+      0x5E: ["LD E,(IX+d)", 1]
+      0x66: ["LD H,(IX+d)", 1]
+      0x6E: ["LD L,(IX+d)", 1]
+      0x70: ["LD (IX+d),B", 1]
+      0x71: ["LD (IX+d),C", 1]
+      0x72: ["LD (IX+d),D", 1]
+      0x73: ["LD (IX+d),E", 1]
+      0x74: ["LD (IX+d),H", 1]
+      0x75: ["LD (IX+d),L", 1]
+      0x77: ["LD (IX+d),A", 1]
+      0x7E: ["LD A,(IX+d)", 1]
+      0x86: ["ADD A,(IX+d)", 1]
+      0x8E: ["ADC A,(IX+d)", 1]
+      0x96: ["SUB (IX+d)", 1]
+      0x9E: ["SBC A,(IX+d)", 1]
+      0xA6: ["AND (IX+d)", 1]
+      0xAE: ["XOR (IX+d)", 1]
+      0xB6: ["OR (IX+d)", 1]
+      0xBE: ["CP (IX+d)", 1]
+      0xE1: ["POP IX", 0]
+      0xE3: ["EX (SP),IX", 0]
+      0xE5: ["PUSH IX", 0]
+      0xE9: ["JP (IX)", 0, indirect]
+      0xF9: ["LD SP,IX", 0]
+
+  FD:
+    prefix: [0xFD]
+    has_displacement: false
+    opcodes:
+      0x09: ["ADD IY,BC", 0]
+      0x19: ["ADD IY,DE", 0]
+      0x21: ["LD IY,nn", 2]
+      0x22: ["LD (nn),IY", 2]
+      0x23: ["INC IY", 0]
+      0x29: ["ADD IY,IY", 0]
+      0x2A: ["LD IY,(nn)", 2]
+      0x2B: ["DEC IY", 0]
+      0x34: ["INC (IY+d)", 1]
+      0x35: ["DEC (IY+d)", 1]
+      0x36: ["LD (IY+d),n", 2]
+      0x39: ["ADD IY,SP", 0]
+      0x46: ["LD B,(IY+d)", 1]
+      0x4E: ["LD C,(IY+d)", 1]
+      0x56: ["LD D,(IY+d)", 1]
+      0x5E: ["LD E,(IY+d)", 1]
+      0x66: ["LD H,(IY+d)", 1]
+      0x6E: ["LD L,(IY+d)", 1]
+      0x70: ["LD (IY+d),B", 1]
+      0x71: ["LD (IY+d),C", 1]
+      0x72: ["LD (IY+d),D", 1]
+      0x73: ["LD (IY+d),E", 1]
+      0x74: ["LD (IY+d),H", 1]
+      0x75: ["LD (IY+d),L", 1]
+      0x77: ["LD (IY+d),A", 1]
+      0x7E: ["LD A,(IY+d)", 1]
+      0x86: ["ADD A,(IY+d)", 1]
+      0x8E: ["ADC A,(IY+d)", 1]
+      0x96: ["SUB (IY+d)", 1]
+      0x9E: ["SBC A,(IY+d)", 1]
+      0xA6: ["AND (IY+d)", 1]
+      0xAE: ["XOR (IY+d)", 1]
+      0xB6: ["OR (IY+d)", 1]
+      0xBE: ["CP (IY+d)", 1]
+      0xE1: ["POP IY", 0]
+      0xE3: ["EX (SP),IY", 0]
+      0xE5: ["PUSH IY", 0]
+      0xE9: ["JP (IY)", 0, indirect]
+      0xF9: ["LD SP,IY", 0]
+
+  DDCB:
+    prefix: [0xDD, 0xCB]
+    has_displacement: true
+    patterns:
+      - { range: [0x06, 0x06], template: "RLC (IX+d)", operand_bytes: 0 }
+      - { range: [0x0E, 0x0E], template: "RRC (IX+d)", operand_bytes: 0 }
+      - { range: [0x16, 0x16], template: "RL (IX+d)", operand_bytes: 0 }
+      - { range: [0x1E, 0x1E], template: "RR (IX+d)", operand_bytes: 0 }
+      - { range: [0x26, 0x26], template: "SLA (IX+d)", operand_bytes: 0 }
+      - { range: [0x2E, 0x2E], template: "SRA (IX+d)", operand_bytes: 0 }
+      - { range: [0x3E, 0x3E], template: "SRL (IX+d)", operand_bytes: 0 }
+    opcodes:
+      0x46: ["BIT 0,(IX+d)", 0]
+      0x4E: ["BIT 1,(IX+d)", 0]
+      0x56: ["BIT 2,(IX+d)", 0]
+      0x5E: ["BIT 3,(IX+d)", 0]
+      0x66: ["BIT 4,(IX+d)", 0]
+      0x6E: ["BIT 5,(IX+d)", 0]
+      0x76: ["BIT 6,(IX+d)", 0]
+      0x7E: ["BIT 7,(IX+d)", 0]
+      0x86: ["RES 0,(IX+d)", 0]
+      0x8E: ["RES 1,(IX+d)", 0]
+      0x96: ["RES 2,(IX+d)", 0]
+      0x9E: ["RES 3,(IX+d)", 0]
+      0xA6: ["RES 4,(IX+d)", 0]
+      0xAE: ["RES 5,(IX+d)", 0]
+      0xB6: ["RES 6,(IX+d)", 0]
+      0xBE: ["RES 7,(IX+d)", 0]
+      0xC6: ["SET 0,(IX+d)", 0]
+      0xCE: ["SET 1,(IX+d)", 0]
+      0xD6: ["SET 2,(IX+d)", 0]
+      0xDE: ["SET 3,(IX+d)", 0]
+      0xE6: ["SET 4,(IX+d)", 0]
+      0xEE: ["SET 5,(IX+d)", 0]
+      0xF6: ["SET 6,(IX+d)", 0]
+      0xFE: ["SET 7,(IX+d)", 0]
+
+  FDCB:
+    prefix: [0xFD, 0xCB]
+    has_displacement: true
+    patterns:
+      - { range: [0x06, 0x06], template: "RLC (IY+d)", operand_bytes: 0 }
+      - { range: [0x0E, 0x0E], template: "RRC (IY+d)", operand_bytes: 0 }
+      - { range: [0x16, 0x16], template: "RL (IY+d)", operand_bytes: 0 }
+      - { range: [0x1E, 0x1E], template: "RR (IY+d)", operand_bytes: 0 }
+      - { range: [0x26, 0x26], template: "SLA (IY+d)", operand_bytes: 0 }
+      - { range: [0x2E, 0x2E], template: "SRA (IY+d)", operand_bytes: 0 }
+      - { range: [0x3E, 0x3E], template: "SRL (IY+d)", operand_bytes: 0 }
+    opcodes:
+      0x46: ["BIT 0,(IY+d)", 0]
+      0x4E: ["BIT 1,(IY+d)", 0]
+      0x56: ["BIT 2,(IY+d)", 0]
+      0x5E: ["BIT 3,(IY+d)", 0]
+      0x66: ["BIT 4,(IY+d)", 0]
+      0x6E: ["BIT 5,(IY+d)", 0]
+      0x76: ["BIT 6,(IY+d)", 0]
+      0x7E: ["BIT 7,(IY+d)", 0]
+      0x86: ["RES 0,(IY+d)", 0]
+      0x8E: ["RES 1,(IY+d)", 0]
+      0x96: ["RES 2,(IY+d)", 0]
+      0x9E: ["RES 3,(IY+d)", 0]
+      0xA6: ["RES 4,(IY+d)", 0]
+      0xAE: ["RES 5,(IY+d)", 0]
+      0xB6: ["RES 6,(IY+d)", 0]
+      0xBE: ["RES 7,(IY+d)", 0]
+      0xC6: ["SET 0,(IY+d)", 0]
+      0xCE: ["SET 1,(IY+d)", 0]
+      0xD6: ["SET 2,(IY+d)", 0]
+      0xDE: ["SET 3,(IY+d)", 0]
+      0xE6: ["SET 4,(IY+d)", 0]
+      0xEE: ["SET 5,(IY+d)", 0]
+      0xF6: ["SET 6,(IY+d)", 0]
+      0xFE: ["SET 7,(IY+d)", 0]
