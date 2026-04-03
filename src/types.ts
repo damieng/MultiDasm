@@ -4,6 +4,7 @@ export interface CpuDef {
   cpu: {
     name: string;
     endian: "little" | "big";
+    opcode_width?: number;  // 1 (default) or 2
   };
   register_sets?: Record<string, string[]>;
   operand_types?: Record<string, RawOperandTypeDef>;
@@ -34,12 +35,16 @@ export interface PrefixGroupDef {
   has_displacement?: boolean;
 }
 
-// Raw YAML operand type definitions (before parsing)
 export type RawOperandTypeDef = Record<string, unknown>;
 
 // --- Resolved operand type definitions ---
 
-export type OperandTypeDef = IndexedOperandDef | RegisterPairDef | RegisterListDef;
+export type OperandTypeDef =
+  | IndexedOperandDef
+  | RegisterPairDef
+  | RegisterListDef
+  | EffectiveAddressDef
+  | RegisterList16Def;
 
 export interface IndexedOperandDef {
   kind: "indexed";
@@ -63,16 +68,38 @@ export interface IndexedModeDef {
 
 export interface RegisterPairDef {
   kind: "register_pair";
-  registers: Map<string, number>;  // name → code
-  reverseMap: Map<number, string>; // code → name
+  registers: Map<string, number>;
+  reverseMap: Map<number, string>;
   sourceBits: [number, number];
   destBits: [number, number];
 }
 
 export interface RegisterListDef {
   kind: "register_list";
-  bits: Map<number, string>;  // bit position → register name
-  reverseMap: Map<string, number>; // name → bit position
+  bits: Map<number, string>;
+  reverseMap: Map<string, number>;
+}
+
+export interface RegisterList16Def {
+  kind: "register_list_16";
+  bits: Map<number, string>;
+  reverseMap: Map<string, number>;
+}
+
+export interface EffectiveAddressDef {
+  kind: "effective_address";
+  modeBits: [number, number];
+  registerBits: [number, number];
+  sizeBits?: [number, number];  // where size is in opcode word
+  dataRegisters: string[];
+  addressRegisters: string[];
+  modes: Map<number, EAModeDef>;
+}
+
+export interface EAModeDef {
+  format: string;
+  extensionWords: number | "size";  // "size" = depends on instruction size
+  subModes?: Map<number, EAModeDef>;
 }
 
 // --- Resolved runtime types ---
@@ -80,6 +107,7 @@ export interface RegisterListDef {
 export interface CpuModel {
   name: string;
   endian: "little" | "big";
+  opcodeWidth: number;
   registerSets: Record<string, string[]>;
   opcodeTable: Map<number, ResolvedInstruction>;
   prefixTables: Map<number, PrefixTable>;
@@ -99,7 +127,7 @@ export interface ResolvedInstruction {
   operandBytes: number;
   encoding: number[];
   flow?: string;
-  customOperands?: string[];  // names of operand_types in this template
+  customOperands?: string[];
 }
 
 export interface AssemblyEntry {

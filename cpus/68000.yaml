@@ -1,0 +1,515 @@
+cpu:
+  name: "Motorola 68000"
+  endian: big
+  opcode_width: 2
+
+register_sets:
+  dn:   [D0, D1, D2, D3, D4, D5, D6, D7]
+  an:   [A0, A1, A2, A3, A4, A5, A6, A7]
+  sz:   [".B", ".W", ".L"]
+  szmv: ["?", ".B", ".L", ".W"]
+  cc:   [T, F, HI, LS, CC, CS, NE, EQ, VC, VS, PL, MI, GE, LT, GT, LE]
+
+# Effective address operand type
+# mode (3 bits) + register (3 bits) → addressing mode + extension words
+operand_types:
+  ea:
+    kind: effective_address
+    mode_bits: "5-3"
+    register_bits: "2-0"
+    size_bits: "7-6"
+    data_registers: [D0, D1, D2, D3, D4, D5, D6, D7]
+    address_registers: [A0, A1, A2, A3, A4, A5, A6, A7]
+    modes:
+      0: { format: "{Dn}", extension_words: 0 }
+      1: { format: "{An}", extension_words: 0 }
+      2: { format: "({An})", extension_words: 0 }
+      3: { format: "({An})+", extension_words: 0 }
+      4: { format: "-({An})", extension_words: 0 }
+      5: { format: "nn({An})", extension_words: 1 }
+      6: { format: "n({An},{Xn})", extension_words: 1 }
+      7:
+        sub_modes:
+          0: { format: "(nn).W", extension_words: 1 }
+          1: { format: "(nnnn).L", extension_words: 2 }
+          2: { format: "nn(PC)", extension_words: 1 }
+          3: { format: "n(PC,{Xn})", extension_words: 1 }
+          4: { format: "#imm", extension_words: "size" }
+
+  # Destination EA for MOVE: mode in bits 8-6, register in bits 11-9
+  ea_dst:
+    kind: effective_address
+    mode_bits: "8-6"
+    register_bits: "11-9"
+    data_registers: [D0, D1, D2, D3, D4, D5, D6, D7]
+    address_registers: [A0, A1, A2, A3, A4, A5, A6, A7]
+    modes:
+      0: { format: "{Dn}", extension_words: 0 }
+      1: { format: "{An}", extension_words: 0 }
+      2: { format: "({An})", extension_words: 0 }
+      3: { format: "({An})+", extension_words: 0 }
+      4: { format: "-({An})", extension_words: 0 }
+      5: { format: "nn({An})", extension_words: 1 }
+      6: { format: "n({An},{Xn})", extension_words: 1 }
+      7:
+        sub_modes:
+          0: { format: "(nn).W", extension_words: 1 }
+          1: { format: "(nnnn).L", extension_words: 2 }
+
+  # MOVEM register list (16-bit)
+  movem_list:
+    kind: register_list_16
+    bits:
+      0: D0
+      1: D1
+      2: D2
+      3: D3
+      4: D4
+      5: D5
+      6: D6
+      7: D7
+      8: A0
+      9: A1
+      10: A2
+      11: A3
+      12: A4
+      13: A5
+      14: A6
+      15: A7
+
+# --- Opcodes ---
+# Explicit entries for fixed instructions
+
+opcodes:
+  # --- Misc/System ---
+  0x4E70: ["RESET", 0]
+  0x4E71: ["NOP", 0]
+  0x4E72: ["STOP #nn", 2]
+  0x4E73: ["RTE", 0, return]
+  0x4E75: ["RTS", 0, return]
+  0x4E76: ["TRAPV", 0]
+  0x4E77: ["RTR", 0, return]
+
+  # --- LINK/UNLK ---
+  0x4E50: ["LINK A0,#nn", 2]
+  0x4E51: ["LINK A1,#nn", 2]
+  0x4E52: ["LINK A2,#nn", 2]
+  0x4E53: ["LINK A3,#nn", 2]
+  0x4E54: ["LINK A4,#nn", 2]
+  0x4E55: ["LINK A5,#nn", 2]
+  0x4E56: ["LINK A6,#nn", 2]
+  0x4E57: ["LINK A7,#nn", 2]
+  0x4E58: ["UNLK A0", 0]
+  0x4E59: ["UNLK A1", 0]
+  0x4E5A: ["UNLK A2", 0]
+  0x4E5B: ["UNLK A3", 0]
+  0x4E5C: ["UNLK A4", 0]
+  0x4E5D: ["UNLK A5", 0]
+  0x4E5E: ["UNLK A6", 0]
+  0x4E5F: ["UNLK A7", 0]
+
+  # --- SWAP ---
+  0x4840: ["SWAP D0", 0]
+  0x4841: ["SWAP D1", 0]
+  0x4842: ["SWAP D2", 0]
+  0x4843: ["SWAP D3", 0]
+  0x4844: ["SWAP D4", 0]
+  0x4845: ["SWAP D5", 0]
+  0x4846: ["SWAP D6", 0]
+  0x4847: ["SWAP D7", 0]
+
+  # --- EXT ---
+  0x4880: ["EXT.W D0", 0]
+  0x4881: ["EXT.W D1", 0]
+  0x4882: ["EXT.W D2", 0]
+  0x4883: ["EXT.W D3", 0]
+  0x4884: ["EXT.W D4", 0]
+  0x4885: ["EXT.W D5", 0]
+  0x4886: ["EXT.W D6", 0]
+  0x4887: ["EXT.W D7", 0]
+  0x48C0: ["EXT.L D0", 0]
+  0x48C1: ["EXT.L D1", 0]
+  0x48C2: ["EXT.L D2", 0]
+  0x48C3: ["EXT.L D3", 0]
+  0x48C4: ["EXT.L D4", 0]
+  0x48C5: ["EXT.L D5", 0]
+  0x48C6: ["EXT.L D6", 0]
+  0x48C7: ["EXT.L D7", 0]
+
+# --- Pattern-generated instructions ---
+patterns:
+  # --- MOVE.B (0x1xxx): ea_src -> ea_dst ---
+  - range: [0x1000, 0x1FFF]
+    template: "MOVE.B ea,ea_dst"
+    operand_bytes: 0
+    exclude:
+      # exclude invalid EA combinations handled elsewhere
+
+  # --- MOVE.L (0x2xxx) ---
+  - range: [0x2000, 0x2FFF]
+    template: "MOVE.L ea,ea_dst"
+    operand_bytes: 0
+
+  # --- MOVE.W (0x3xxx) ---
+  - range: [0x3000, 0x3FFF]
+    template: "MOVE.W ea,ea_dst"
+    operand_bytes: 0
+
+  # --- MOVEA.L (destination mode=1) ---
+  # Already covered by MOVE.L pattern, ea_dst mode=1 gives An
+
+  # --- CLR ---
+  - range: [0x4200, 0x423F]
+    template: "CLR.B ea"
+    operand_bytes: 0
+  - range: [0x4240, 0x427F]
+    template: "CLR.W ea"
+    operand_bytes: 0
+  - range: [0x4280, 0x42BF]
+    template: "CLR.L ea"
+    operand_bytes: 0
+
+  # --- NEG ---
+  - range: [0x4400, 0x443F]
+    template: "NEG.B ea"
+    operand_bytes: 0
+  - range: [0x4440, 0x447F]
+    template: "NEG.W ea"
+    operand_bytes: 0
+  - range: [0x4480, 0x44BF]
+    template: "NEG.L ea"
+    operand_bytes: 0
+
+  # --- NOT ---
+  - range: [0x4600, 0x463F]
+    template: "NOT.B ea"
+    operand_bytes: 0
+  - range: [0x4640, 0x467F]
+    template: "NOT.W ea"
+    operand_bytes: 0
+  - range: [0x4680, 0x46BF]
+    template: "NOT.L ea"
+    operand_bytes: 0
+
+  # --- TST ---
+  - range: [0x4A00, 0x4A3F]
+    template: "TST.B ea"
+    operand_bytes: 0
+  - range: [0x4A40, 0x4A7F]
+    template: "TST.W ea"
+    operand_bytes: 0
+  - range: [0x4A80, 0x4ABF]
+    template: "TST.L ea"
+    operand_bytes: 0
+
+  # --- LEA ---
+  - range: [0x41C0, 0x41FF]
+    template: "LEA ea,A0"
+    operand_bytes: 0
+  - range: [0x43C0, 0x43FF]
+    template: "LEA ea,A1"
+    operand_bytes: 0
+  - range: [0x45C0, 0x45FF]
+    template: "LEA ea,A2"
+    operand_bytes: 0
+  - range: [0x47C0, 0x47FF]
+    template: "LEA ea,A3"
+    operand_bytes: 0
+  - range: [0x49C0, 0x49FF]
+    template: "LEA ea,A4"
+    operand_bytes: 0
+  - range: [0x4BC0, 0x4BFF]
+    template: "LEA ea,A5"
+    operand_bytes: 0
+  - range: [0x4DC0, 0x4DFF]
+    template: "LEA ea,A6"
+    operand_bytes: 0
+  - range: [0x4FC0, 0x4FFF]
+    template: "LEA ea,A7"
+    operand_bytes: 0
+
+  # --- JMP ea ---
+  - range: [0x4EC0, 0x4EFF]
+    template: "JMP ea"
+    operand_bytes: 0
+    flow: indirect
+
+  # --- JSR ea ---
+  - range: [0x4E80, 0x4EBF]
+    template: "JSR ea"
+    operand_bytes: 0
+    flow: call
+
+  # --- PEA ea ---
+  - range: [0x4840, 0x487F]
+    template: "PEA ea"
+    operand_bytes: 0
+
+  # --- TRAP ---
+  - range: [0x4E40, 0x4E4F]
+    template: "TRAP #{bit:3-0}"
+    operand_bytes: 0
+
+  # --- Bcc (8-bit displacement in opcode low byte) ---
+  # BRA (cc=0)
+  - range: [0x6001, 0x60FF]
+    template: "BRA e"
+    operand_bytes: 0
+    flow: jump
+  # BSR (cc=1)
+  - range: [0x6101, 0x61FF]
+    template: "BSR e"
+    operand_bytes: 0
+    flow: call
+  # BHI..BLE (cc=2..15)
+  - range: [0x6201, 0x62FF]
+    template: "BHI e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6301, 0x63FF]
+    template: "BLS e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6401, 0x64FF]
+    template: "BCC e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6501, 0x65FF]
+    template: "BCS e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6601, 0x66FF]
+    template: "BNE e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6701, 0x67FF]
+    template: "BEQ e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6801, 0x68FF]
+    template: "BVC e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6901, 0x69FF]
+    template: "BVS e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6A01, 0x6AFF]
+    template: "BPL e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6B01, 0x6BFF]
+    template: "BMI e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6C01, 0x6CFF]
+    template: "BGE e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6D01, 0x6DFF]
+    template: "BLT e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6E01, 0x6EFF]
+    template: "BGT e"
+    operand_bytes: 0
+    flow: cond_branch
+  - range: [0x6F01, 0x6FFF]
+    template: "BLE e"
+    operand_bytes: 0
+    flow: cond_branch
+
+  # Bcc with 16-bit displacement (low byte = 0)
+  - range: [0x6000, 0x6000]
+    template: "BRA ee"
+    operand_bytes: 2
+    flow: jump
+  - range: [0x6100, 0x6100]
+    template: "BSR ee"
+    operand_bytes: 2
+    flow: call
+  - range: [0x6200, 0x6200]
+    template: "BHI ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6300, 0x6300]
+    template: "BLS ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6400, 0x6400]
+    template: "BCC ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6500, 0x6500]
+    template: "BCS ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6600, 0x6600]
+    template: "BNE ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6700, 0x6700]
+    template: "BEQ ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6800, 0x6800]
+    template: "BVC ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6900, 0x6900]
+    template: "BVS ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6A00, 0x6A00]
+    template: "BPL ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6B00, 0x6B00]
+    template: "BMI ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6C00, 0x6C00]
+    template: "BGE ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6D00, 0x6D00]
+    template: "BLT ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6E00, 0x6E00]
+    template: "BGT ee"
+    operand_bytes: 2
+    flow: cond_branch
+  - range: [0x6F00, 0x6F00]
+    template: "BLE ee"
+    operand_bytes: 2
+    flow: cond_branch
+
+  # --- MOVEQ #imm8,Dn ---
+  - range: [0x7000, 0x71FF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7200, 0x73FF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7400, 0x75FF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7600, 0x77FF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7800, 0x79FF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7A00, 0x7BFF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7C00, 0x7DFF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+  - range: [0x7E00, 0x7FFF]
+    template: "MOVEQ #{bit:7-0},{dn:11-9}"
+    operand_bytes: 0
+
+  # --- ADD ea,Dn ---
+  - range: [0xD000, 0xD03F]
+    template: "ADD.B ea,D0"
+    operand_bytes: 0
+  - range: [0xD040, 0xD07F]
+    template: "ADD.W ea,D0"
+    operand_bytes: 0
+  - range: [0xD080, 0xD0BF]
+    template: "ADD.L ea,D0"
+    operand_bytes: 0
+  - range: [0xD200, 0xD23F]
+    template: "ADD.B ea,D1"
+    operand_bytes: 0
+  - range: [0xD240, 0xD27F]
+    template: "ADD.W ea,D1"
+    operand_bytes: 0
+  - range: [0xD280, 0xD2BF]
+    template: "ADD.L ea,D1"
+    operand_bytes: 0
+
+  # --- SUB ea,Dn ---
+  - range: [0x9000, 0x903F]
+    template: "SUB.B ea,D0"
+    operand_bytes: 0
+  - range: [0x9040, 0x907F]
+    template: "SUB.W ea,D0"
+    operand_bytes: 0
+  - range: [0x9080, 0x90BF]
+    template: "SUB.L ea,D0"
+    operand_bytes: 0
+
+  # --- CMP ea,Dn ---
+  - range: [0xB000, 0xB03F]
+    template: "CMP.B ea,D0"
+    operand_bytes: 0
+  - range: [0xB040, 0xB07F]
+    template: "CMP.W ea,D0"
+    operand_bytes: 0
+  - range: [0xB080, 0xB0BF]
+    template: "CMP.L ea,D0"
+    operand_bytes: 0
+
+  # --- AND ea,Dn ---
+  - range: [0xC000, 0xC03F]
+    template: "AND.B ea,D0"
+    operand_bytes: 0
+  - range: [0xC040, 0xC07F]
+    template: "AND.W ea,D0"
+    operand_bytes: 0
+  - range: [0xC080, 0xC0BF]
+    template: "AND.L ea,D0"
+    operand_bytes: 0
+
+  # --- OR ea,Dn ---
+  - range: [0x8000, 0x803F]
+    template: "OR.B ea,D0"
+    operand_bytes: 0
+  - range: [0x8040, 0x807F]
+    template: "OR.W ea,D0"
+    operand_bytes: 0
+  - range: [0x8080, 0x80BF]
+    template: "OR.L ea,D0"
+    operand_bytes: 0
+
+  # --- ADDI/SUBI/CMPI/ANDI/ORI/EORI #imm,ea ---
+  - range: [0x0600, 0x063F]
+    template: "ADDI.B #n,ea"
+    operand_bytes: 2
+  - range: [0x0640, 0x067F]
+    template: "ADDI.W #nn,ea"
+    operand_bytes: 2
+  - range: [0x0680, 0x06BF]
+    template: "ADDI.L #nnnn,ea"
+    operand_bytes: 4
+
+  - range: [0x0400, 0x043F]
+    template: "SUBI.B #n,ea"
+    operand_bytes: 2
+  - range: [0x0440, 0x047F]
+    template: "SUBI.W #nn,ea"
+    operand_bytes: 2
+  - range: [0x0480, 0x04BF]
+    template: "SUBI.L #nnnn,ea"
+    operand_bytes: 4
+
+  - range: [0x0C00, 0x0C3F]
+    template: "CMPI.B #n,ea"
+    operand_bytes: 2
+  - range: [0x0C40, 0x0C7F]
+    template: "CMPI.W #nn,ea"
+    operand_bytes: 2
+  - range: [0x0C80, 0x0CBF]
+    template: "CMPI.L #nnnn,ea"
+    operand_bytes: 4
+
+  # --- ADDA/SUBA/CMPA ea,An ---
+  - range: [0xD0C0, 0xD0FF]
+    template: "ADDA.W ea,A0"
+    operand_bytes: 0
+  - range: [0xD1C0, 0xD1FF]
+    template: "ADDA.L ea,A0"
+    operand_bytes: 0

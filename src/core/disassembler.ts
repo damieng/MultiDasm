@@ -36,6 +36,15 @@ function hex16(v: number): string {
   return "$" + (v & 0xffff).toString(16).toUpperCase().padStart(4, "0");
 }
 
+function hex32(v: number): string {
+  return "$" + (v >>> 0).toString(16).toUpperCase().padStart(8, "0");
+}
+
+function read32(b0: number, b1: number, b2: number, b3: number, endian: string): number {
+  if (endian === "big") return ((b0 << 24) | (b1 << 16) | (b2 << 8) | b3) >>> 0;
+  return ((b3 << 24) | (b2 << 16) | (b1 << 8) | b0) >>> 0;
+}
+
 // Format template by replacing placeholders with values.
 // customTexts: map of custom operand type name → formatted text (already decoded).
 function formatTemplate(
@@ -81,6 +90,17 @@ function formatTemplate(
       const target = (instrAddr + instrLen + offset16) & 0xffff;
       result += hex16(target);
       i += 2;
+      continue;
+    }
+
+    // nnnn (32-bit value) — check before nn
+    if (tmpl[i] === "n" && tmpl.substring(i, i + 4) === "nnnn" && isStandalone(tmpl, i, 4)) {
+      const b0 = operandBytes[byteIdx++] ?? 0;
+      const b1 = operandBytes[byteIdx++] ?? 0;
+      const b2 = operandBytes[byteIdx++] ?? 0;
+      const b3 = operandBytes[byteIdx++] ?? 0;
+      result += hex32(read32(b0, b1, b2, b3, endian));
+      i += 4;
       continue;
     }
 
@@ -180,6 +200,7 @@ function decodeCustom(
   data: Uint8Array,
   operandStart: number,
   model: CpuModel,
+  opcodeKey?: number,
 ): { allBytes: number[]; totalExtra: number; customTexts: Map<string, string> } | null {
   const customTexts = new Map<string, string>();
   let pos = operandStart;
@@ -187,20 +208,32 @@ function decodeCustom(
 
   for (const name of instr.customOperands!) {
     const def = model.operandTypes.get(name);
-    if (!def || pos >= data.length) return null;
+    if (!def) return null;
 
-    // read the postbyte to determine extra bytes
-    const postbyte = data[pos]!;
-    const extra = calcExtraBytes(def, postbyte);
-    if (pos + 1 + extra > data.length) return null;
-
-    // decode for display
-    const decoded = decodeOperandType(def, data, pos, model.endian);
-    if (!decoded) return null;
-
-    customTexts.set(name, decoded.text);
-    totalExtra += decoded.bytesConsumed;
-    pos += decoded.bytesConsumed;
+    if (def.kind === "effective_address") {
+      // EA reads mode/register from opcode word, extension words from data
+      const sizeCode = def.sizeBits
+        ? extractBitsHelper(opcodeKey ?? 0, def.sizeBits[0], def.sizeBits[1])
+        : undefined;
+      const extra = calcExtraBytes(def, 0, opcodeKey, sizeCode);
+      if (pos + extra > data.length) return null;
+      const decoded = decodeOperandType(def, data, pos, model.endian, opcodeKey, sizeCode);
+      if (!decoded) return null;
+      customTexts.set(name, decoded.text);
+      totalExtra += decoded.bytesConsumed;
+      pos += decoded.bytesConsumed;
+    } else {
+      // postbyte-based types (indexed, register_pair, register_list, register_list_16)
+      if (pos >= data.length) return null;
+      const postbyte = data[pos]!;
+      const extra = calcExtraBytes(def, postbyte);
+      if (pos + 1 + extra > data.length) return null;
+      const decoded = decodeOperandType(def, data, pos, model.endian);
+      if (!decoded) return null;
+      customTexts.set(name, decoded.text);
+      totalExtra += decoded.bytesConsumed;
+      pos += decoded.bytesConsumed;
+    }
   }
 
   const allBytes = readOperandBytes(data, operandStart, totalExtra);
@@ -208,12 +241,28 @@ function decodeCustom(
   return { allBytes, totalExtra, customTexts };
 }
 
+function extractBitsHelper(value: number, hi: number, lo: number): number {
+  return (value >> lo) & ((1 << (hi - lo + 1)) - 1);
+}
+
+function readOpcodeKey(data: Uint8Array, offset: number, width: number, endian: string): number | null {
+  if (offset + width > data.length) return null;
+  if (width === 1) return data[offset]!;
+  if (width === 2) {
+    return endian === "big"
+      ? (data[offset]! << 8) | data[offset + 1]!
+      : data[offset]! | (data[offset + 1]! << 8);
+  }
+  return null;
+}
+
 function decodeOne(data: Uint8Array, offset: number, model: CpuModel): DecodeResult | null {
   if (offset >= data.length) return null;
+  const opcodeWidth = model.opcodeWidth;
   const byte0 = data[offset]!;
 
-  // check for prefix bytes
-  if (model.prefixBytes.has(byte0) && model.prefixTables.size > 0) {
+  // check for prefix bytes (only for 1-byte opcode width CPUs)
+  if (opcodeWidth === 1 && model.prefixBytes.has(byte0) && model.prefixTables.size > 0) {
     if (offset + 1 >= data.length) return null;
     const byte1 = data[offset + 1]!;
 
@@ -251,7 +300,7 @@ function decodeOne(data: Uint8Array, offset: number, model: CpuModel): DecodeRes
         const prefixOpcodeLen = 2;
         // custom operands?
         if (instr.customOperands?.length) {
-          const custom = decodeCustom(instr, data, offset + prefixOpcodeLen, model);
+          const custom = decodeCustom(instr, data, offset + prefixOpcodeLen, model, byte1);
           if (!custom) return null;
           return {
             instr,
@@ -267,15 +316,17 @@ function decodeOne(data: Uint8Array, offset: number, model: CpuModel): DecodeRes
     }
   }
 
-  // regular opcode
-  const instr = model.opcodeTable.get(byte0);
+  // regular opcode (1 or 2 byte width)
+  const opcodeKey = readOpcodeKey(data, offset, opcodeWidth, model.endian);
+  if (opcodeKey === null) return null;
+  const instr = model.opcodeTable.get(opcodeKey);
   if (!instr) return null;
 
-  const opcodeLen = 1;
+  const opcodeLen = opcodeWidth;
 
   // custom operands?
   if (instr.customOperands?.length) {
-    const custom = decodeCustom(instr, data, offset + opcodeLen, model);
+    const custom = decodeCustom(instr, data, offset + opcodeLen, model, opcodeKey);
     if (!custom) return null;
     return {
       instr,
@@ -287,7 +338,24 @@ function decodeOne(data: Uint8Array, offset: number, model: CpuModel): DecodeRes
 
   const opBytes = readOperandBytes(data, offset + opcodeLen, instr.operandBytes);
   if (!opBytes) return null;
+
+  // For 2-byte opcodes with embedded displacement in low byte:
+  // if template has 'e' placeholder and operandBytes is 0, inject the opcode low byte
+  if (opcodeWidth === 2 && instr.operandBytes === 0 && !instr.customOperands?.length) {
+    const lowByte = opcodeKey & 0xff;
+    if (lowByte !== 0 && hasEmbeddedDisplacement(instr.template)) {
+      return { instr, operandBytes: [lowByte], instrLen: opcodeLen };
+    }
+  }
+
   return { instr, operandBytes: opBytes, instrLen: opcodeLen + instr.operandBytes };
+}
+
+function hasEmbeddedDisplacement(template: string): boolean {
+  for (let i = 0; i < template.length; i++) {
+    if (template[i] === "e" && isStandalone(template, i, 1)) return true;
+  }
+  return false;
 }
 
 // --- Recursive descent disassembler ---

@@ -12,6 +12,9 @@ import type {
   IndexedOperandDef,
   RegisterPairDef,
   RegisterListDef,
+  RegisterList16Def,
+  EffectiveAddressDef,
+  EAModeDef,
 } from "../types.js";
 
 export function loadCpuDef(path: string): CpuDef {
@@ -65,9 +68,59 @@ function parseOperandTypes(raw: Record<string, Record<string, unknown>>): Map<st
       case "register_list":
         result.set(name, parseRegListDef(def));
         break;
+      case "register_list_16":
+        result.set(name, parseRegList16Def(def));
+        break;
+      case "effective_address":
+        result.set(name, parseEADef(def));
+        break;
     }
   }
   return result;
+}
+
+function parseRegList16Def(raw: Record<string, unknown>): RegisterList16Def {
+  const bitsRaw = raw["bits"] as Record<number, string>;
+  const bits = new Map<number, string>();
+  const reverseMap = new Map<string, number>();
+  for (const [pos, name] of Object.entries(bitsRaw)) {
+    const bitPos = parseInt(pos, 10);
+    bits.set(bitPos, name.toUpperCase());
+    reverseMap.set(name.toUpperCase(), bitPos);
+  }
+  return { kind: "register_list_16", bits, reverseMap };
+}
+
+function parseEAModeDef(raw: Record<string, unknown>): EAModeDef {
+  const result: EAModeDef = {
+    format: (raw["format"] as string) ?? "",
+    extensionWords: (raw["extension_words"] as number | "size") ?? 0,
+  };
+  if (raw["sub_modes"]) {
+    result.subModes = new Map<number, EAModeDef>();
+    const subsRaw = raw["sub_modes"] as Record<string, Record<string, unknown>>;
+    for (const [key, val] of Object.entries(subsRaw)) {
+      result.subModes.set(parseOpcodeKey(key), parseEAModeDef(val));
+    }
+  }
+  return result;
+}
+
+function parseEADef(raw: Record<string, unknown>): EffectiveAddressDef {
+  const modesRaw = raw["modes"] as Record<string, Record<string, unknown>>;
+  const modes = new Map<number, EAModeDef>();
+  for (const [key, val] of Object.entries(modesRaw)) {
+    modes.set(parseOpcodeKey(key), parseEAModeDef(val));
+  }
+  return {
+    kind: "effective_address",
+    modeBits: parseBitRange((raw["mode_bits"] as string) ?? "5-3"),
+    registerBits: parseBitRange((raw["register_bits"] as string) ?? "2-0"),
+    sizeBits: raw["size_bits"] ? parseBitRange(raw["size_bits"] as string) : undefined,
+    dataRegisters: (raw["data_registers"] as string[]) ?? [],
+    addressRegisters: (raw["address_registers"] as string[]) ?? [],
+    modes,
+  };
 }
 
 function parseIndexedDef(raw: Record<string, unknown>): IndexedOperandDef {
@@ -143,14 +196,22 @@ function resolveOpcodeDef(
   opcode: number,
   prefix: number[],
   operandTypeNames: Set<string>,
+  resolvedTypes?: Map<string, OperandTypeDef>,
 ): ResolvedInstruction {
   const template = entry[0];
   const second = entry[1];
   let operandBytes: number;
 
   if (typeof second === "string") {
-    // custom operand type — postbyte is 1 byte minimum
-    operandBytes = 1;
+    // custom operand type — determine base bytes from kind
+    const typeDef = resolvedTypes?.get(second);
+    if (typeDef?.kind === "effective_address") {
+      operandBytes = 0; // EA extension words are dynamic
+    } else if (typeDef?.kind === "register_list_16") {
+      operandBytes = 1; // will consume 2 bytes (handled by decoder)
+    } else {
+      operandBytes = 1; // default: 1 postbyte (indexed, register_pair, register_list)
+    }
   } else {
     operandBytes = second;
   }
@@ -181,6 +242,7 @@ function resolvePatterns(
   registerSets: Record<string, string[]>,
   prefix: number[],
   operandTypeNames: Set<string>,
+  resolvedTypes?: Map<string, OperandTypeDef>,
 ): Map<number, ResolvedInstruction> {
   const result = new Map<number, ResolvedInstruction>();
   for (const pat of patterns) {
@@ -195,7 +257,7 @@ function resolvePatterns(
         let excluded = false;
         for (const k of keys) {
           if (pat.exclude[k]) {
-            result.set(opcode, resolveOpcodeDef(pat.exclude[k]!, opcode, prefix, operandTypeNames));
+            result.set(opcode, resolveOpcodeDef(pat.exclude[k]!, opcode, prefix, operandTypeNames, resolvedTypes));
             excluded = true;
             break;
           }
@@ -235,13 +297,13 @@ export function buildCpuModel(def: CpuDef): CpuModel {
   if (def.opcodes) {
     for (const [key, entry] of Object.entries(def.opcodes)) {
       const opcode = parseOpcodeKey(key);
-      opcodeTable.set(opcode, resolveOpcodeDef(entry, opcode, [], operandTypeNames));
+      opcodeTable.set(opcode, resolveOpcodeDef(entry, opcode, [], operandTypeNames, operandTypes));
     }
   }
 
   // patterns
   if (def.patterns) {
-    const resolved = resolvePatterns(def.patterns, registerSets, [], operandTypeNames);
+    const resolved = resolvePatterns(def.patterns, registerSets, [], operandTypeNames, operandTypes);
     for (const [opcode, instr] of resolved) {
       if (!opcodeTable.has(opcode)) opcodeTable.set(opcode, instr);
     }
@@ -259,12 +321,12 @@ export function buildCpuModel(def: CpuDef): CpuModel {
       if (group.opcodes) {
         for (const [key, entry] of Object.entries(group.opcodes)) {
           const opcode = parseOpcodeKey(key);
-          table.opcodes.set(opcode, resolveOpcodeDef(entry, opcode, group.prefix, operandTypeNames));
+          table.opcodes.set(opcode, resolveOpcodeDef(entry, opcode, group.prefix, operandTypeNames, operandTypes));
         }
       }
 
       if (group.patterns) {
-        const resolved = resolvePatterns(group.patterns, registerSets, group.prefix, operandTypeNames);
+        const resolved = resolvePatterns(group.patterns, registerSets, group.prefix, operandTypeNames, operandTypes);
         for (const [opcode, instr] of resolved) {
           if (!table.opcodes.has(opcode)) table.opcodes.set(opcode, instr);
         }
@@ -300,6 +362,7 @@ export function buildCpuModel(def: CpuDef): CpuModel {
   return {
     name: def.cpu.name,
     endian: def.cpu.endian,
+    opcodeWidth: def.cpu.opcode_width ?? 1,
     registerSets,
     opcodeTable,
     prefixTables,

@@ -115,6 +115,13 @@ function matchTemplate(
       i += 2;
       continue;
     }
+    // nnnn 32-bit — check before nn
+    if (template.substring(i, i + 4) === "nnnn" && isStandalone(template, i, 4)) {
+      pattern += "([^\\s,()]+)";
+      captureTypes.push("nnnn");
+      i += 4;
+      continue;
+    }
     // nn 16-bit
     if (template[i] === "n" && template[i + 1] === "n" && isStandalone(template, i, 2)) {
       pattern += "([^\\s,()]+)";
@@ -213,6 +220,15 @@ function matchInstruction(
     let standardOk = true;
     for (const cap of tmatch.captures) {
       switch (cap.type) {
+        case "nnnn":
+          if (model.endian === "big") {
+            emitBytes.push((cap.value >> 24) & 0xff, (cap.value >> 16) & 0xff,
+                           (cap.value >> 8) & 0xff, cap.value & 0xff);
+          } else {
+            emitBytes.push(cap.value & 0xff, (cap.value >> 8) & 0xff,
+                           (cap.value >> 16) & 0xff, (cap.value >> 24) & 0xff);
+          }
+          break;
         case "nn":
           if (model.endian === "little") {
             emitBytes.push(cap.value & 0xff, (cap.value >> 8) & 0xff);
