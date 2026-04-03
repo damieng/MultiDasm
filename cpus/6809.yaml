@@ -1,0 +1,355 @@
+cpu:
+  name: "Motorola 6809"
+  endian: big
+
+# Custom operand types
+operand_types:
+  idx:
+    kind: indexed
+    index_registers: [X, Y, U, S]
+    indirect_bit: 4
+    auto_offset:
+      register_bits: "6-5"
+      offset_bits: "4-0"
+      signed: true
+    modes:
+      0x0: { format: ",{R}+", extra: 0, no_indirect: true }
+      0x1: { format: ",{R}++", extra: 0 }
+      0x2: { format: ",-{R}", extra: 0, no_indirect: true }
+      0x3: { format: ",--{R}", extra: 0 }
+      0x4: { format: ",{R}", extra: 0 }
+      0x5: { format: "B,{R}", extra: 0 }
+      0x6: { format: "A,{R}", extra: 0 }
+      0x8: { format: "n,{R}", extra: 1 }
+      0x9: { format: "nn,{R}", extra: 2 }
+      0xB: { format: "D,{R}", extra: 0 }
+      0xC: { format: "n,PCR", extra: 1, no_register: true }
+      0xD: { format: "nn,PCR", extra: 2, no_register: true }
+      0xF: { format: "[nn]", extra: 2, no_register: true, indirect_only: true }
+
+  rr:
+    kind: register_pair
+    registers: { D: 0, X: 1, Y: 2, U: 3, S: 4, PC: 5, A: 8, B: 9, CC: 0xA, DP: 0xB }
+    source_bits: "7-4"
+    dest_bits: "3-0"
+
+  rlist_s:
+    kind: register_list
+    bits: { 0: CC, 1: A, 2: B, 3: DP, 4: X, 5: Y, 6: U, 7: PC }
+
+  rlist_u:
+    kind: register_list
+    bits: { 0: CC, 1: A, 2: B, 3: DP, 4: X, 5: Y, 6: S, 7: PC }
+
+# Flow types: jump, cond_branch, call, cond_call, return, cond_return, indirect
+
+opcodes:
+  # --- Direct page (0x00-0x0F) ---
+  0x00: ["NEG n", 1]
+  0x03: ["COM n", 1]
+  0x04: ["LSR n", 1]
+  0x06: ["ROR n", 1]
+  0x07: ["ASR n", 1]
+  0x08: ["LSL n", 1]
+  0x09: ["ROL n", 1]
+  0x0A: ["DEC n", 1]
+  0x0C: ["INC n", 1]
+  0x0D: ["TST n", 1]
+  0x0E: ["JMP n", 1, jump]
+  0x0F: ["CLR n", 1]
+
+  # --- Misc / Stack (0x10-0x1F) ---
+  0x12: ["NOP", 0]
+  0x13: ["SYNC", 0]
+  0x16: ["LBRA ee", 2, jump]
+  0x17: ["LBSR ee", 2, call]
+  0x19: ["DAA", 0]
+  0x1A: ["ORCC #n", 1]
+  0x1C: ["ANDCC #n", 1]
+  0x1D: ["SEX", 0]
+  0x1E: ["EXG rr", rr]
+  0x1F: ["TFR rr", rr]
+
+  # --- Branches (0x20-0x2F) ---
+  0x20: ["BRA e", 1, jump]
+  0x21: ["BRN e", 1]
+  0x22: ["BHI e", 1, cond_branch]
+  0x23: ["BLS e", 1, cond_branch]
+  0x24: ["BCC e", 1, cond_branch]
+  0x25: ["BCS e", 1, cond_branch]
+  0x26: ["BNE e", 1, cond_branch]
+  0x27: ["BEQ e", 1, cond_branch]
+  0x28: ["BVC e", 1, cond_branch]
+  0x29: ["BVS e", 1, cond_branch]
+  0x2A: ["BPL e", 1, cond_branch]
+  0x2B: ["BMI e", 1, cond_branch]
+  0x2C: ["BGE e", 1, cond_branch]
+  0x2D: ["BLT e", 1, cond_branch]
+  0x2E: ["BGT e", 1, cond_branch]
+  0x2F: ["BLE e", 1, cond_branch]
+
+  # --- LEA / Stack (0x30-0x3F) ---
+  0x30: ["LEAX idx", idx]
+  0x31: ["LEAY idx", idx]
+  0x32: ["LEAS idx", idx]
+  0x33: ["LEAU idx", idx]
+  0x34: ["PSHS rlist_s", rlist_s]
+  0x35: ["PULS rlist_s", rlist_s]
+  0x36: ["PSHU rlist_u", rlist_u]
+  0x37: ["PULU rlist_u", rlist_u]
+  0x39: ["RTS", 0, return]
+  0x3A: ["ABX", 0]
+  0x3B: ["RTI", 0, return]
+  0x3C: ["CWAI #n", 1]
+  0x3D: ["MUL", 0]
+  0x3F: ["SWI", 0]
+
+  # --- Register A inherent (0x40-0x4F) ---
+  0x40: ["NEGA", 0]
+  0x43: ["COMA", 0]
+  0x44: ["LSRA", 0]
+  0x46: ["RORA", 0]
+  0x47: ["ASRA", 0]
+  0x48: ["LSLA", 0]
+  0x49: ["ROLA", 0]
+  0x4A: ["DECA", 0]
+  0x4C: ["INCA", 0]
+  0x4D: ["TSTA", 0]
+  0x4F: ["CLRA", 0]
+
+  # --- Register B inherent (0x50-0x5F) ---
+  0x50: ["NEGB", 0]
+  0x53: ["COMB", 0]
+  0x54: ["LSRB", 0]
+  0x56: ["RORB", 0]
+  0x57: ["ASRB", 0]
+  0x58: ["LSLB", 0]
+  0x59: ["ROLB", 0]
+  0x5A: ["DECB", 0]
+  0x5C: ["INCB", 0]
+  0x5D: ["TSTB", 0]
+  0x5F: ["CLRB", 0]
+
+  # --- Indexed operations (0x60-0x6F) ---
+  0x60: ["NEG idx", idx]
+  0x63: ["COM idx", idx]
+  0x64: ["LSR idx", idx]
+  0x66: ["ROR idx", idx]
+  0x67: ["ASR idx", idx]
+  0x68: ["LSL idx", idx]
+  0x69: ["ROL idx", idx]
+  0x6A: ["DEC idx", idx]
+  0x6C: ["INC idx", idx]
+  0x6D: ["TST idx", idx]
+  0x6E: ["JMP idx", idx, indirect]
+  0x6F: ["CLR idx", idx]
+
+  # --- Extended operations (0x70-0x7F) ---
+  0x70: ["NEG nn", 2]
+  0x73: ["COM nn", 2]
+  0x74: ["LSR nn", 2]
+  0x76: ["ROR nn", 2]
+  0x77: ["ASR nn", 2]
+  0x78: ["LSL nn", 2]
+  0x79: ["ROL nn", 2]
+  0x7A: ["DEC nn", 2]
+  0x7C: ["INC nn", 2]
+  0x7D: ["TST nn", 2]
+  0x7E: ["JMP nn", 2, jump]
+  0x7F: ["CLR nn", 2]
+
+  # --- A immediate (0x80-0x8F) ---
+  0x80: ["SUBA #n", 1]
+  0x81: ["CMPA #n", 1]
+  0x82: ["SBCA #n", 1]
+  0x83: ["SUBD #nn", 2]
+  0x84: ["ANDA #n", 1]
+  0x85: ["BITA #n", 1]
+  0x86: ["LDA #n", 1]
+  0x88: ["EORA #n", 1]
+  0x89: ["ADCA #n", 1]
+  0x8A: ["ORA #n", 1]
+  0x8B: ["ADDA #n", 1]
+  0x8C: ["CMPX #nn", 2]
+  0x8D: ["BSR e", 1, call]
+  0x8E: ["LDX #nn", 2]
+
+  # --- A direct (0x90-0x9F) ---
+  0x90: ["SUBA n", 1]
+  0x91: ["CMPA n", 1]
+  0x92: ["SBCA n", 1]
+  0x93: ["SUBD n", 1]
+  0x94: ["ANDA n", 1]
+  0x95: ["BITA n", 1]
+  0x96: ["LDA n", 1]
+  0x97: ["STA n", 1]
+  0x98: ["EORA n", 1]
+  0x99: ["ADCA n", 1]
+  0x9A: ["ORA n", 1]
+  0x9B: ["ADDA n", 1]
+  0x9C: ["CMPX n", 1]
+  0x9D: ["JSR n", 1, call]
+  0x9E: ["LDX n", 1]
+  0x9F: ["STX n", 1]
+
+  # --- A indexed (0xA0-0xAF) ---
+  0xA0: ["SUBA idx", idx]
+  0xA1: ["CMPA idx", idx]
+  0xA2: ["SBCA idx", idx]
+  0xA3: ["SUBD idx", idx]
+  0xA4: ["ANDA idx", idx]
+  0xA5: ["BITA idx", idx]
+  0xA6: ["LDA idx", idx]
+  0xA7: ["STA idx", idx]
+  0xA8: ["EORA idx", idx]
+  0xA9: ["ADCA idx", idx]
+  0xAA: ["ORA idx", idx]
+  0xAB: ["ADDA idx", idx]
+  0xAC: ["CMPX idx", idx]
+  0xAD: ["JSR idx", idx, call]
+  0xAE: ["LDX idx", idx]
+  0xAF: ["STX idx", idx]
+
+  # --- A extended (0xB0-0xBF) ---
+  0xB0: ["SUBA nn", 2]
+  0xB1: ["CMPA nn", 2]
+  0xB2: ["SBCA nn", 2]
+  0xB3: ["SUBD nn", 2]
+  0xB4: ["ANDA nn", 2]
+  0xB5: ["BITA nn", 2]
+  0xB6: ["LDA nn", 2]
+  0xB7: ["STA nn", 2]
+  0xB8: ["EORA nn", 2]
+  0xB9: ["ADCA nn", 2]
+  0xBA: ["ORA nn", 2]
+  0xBB: ["ADDA nn", 2]
+  0xBC: ["CMPX nn", 2]
+  0xBD: ["JSR nn", 2, call]
+  0xBE: ["LDX nn", 2]
+  0xBF: ["STX nn", 2]
+
+  # --- B immediate (0xC0-0xCF) ---
+  0xC0: ["SUBB #n", 1]
+  0xC1: ["CMPB #n", 1]
+  0xC2: ["SBCB #n", 1]
+  0xC3: ["ADDD #nn", 2]
+  0xC4: ["ANDB #n", 1]
+  0xC5: ["BITB #n", 1]
+  0xC6: ["LDB #n", 1]
+  0xC8: ["EORB #n", 1]
+  0xC9: ["ADCB #n", 1]
+  0xCA: ["ORB #n", 1]
+  0xCB: ["ADDB #n", 1]
+  0xCC: ["LDD #nn", 2]
+  0xCE: ["LDU #nn", 2]
+
+  # --- B direct (0xD0-0xDF) ---
+  0xD0: ["SUBB n", 1]
+  0xD1: ["CMPB n", 1]
+  0xD2: ["SBCB n", 1]
+  0xD3: ["ADDD n", 1]
+  0xD4: ["ANDB n", 1]
+  0xD5: ["BITB n", 1]
+  0xD6: ["LDB n", 1]
+  0xD7: ["STB n", 1]
+  0xD8: ["EORB n", 1]
+  0xD9: ["ADCB n", 1]
+  0xDA: ["ORB n", 1]
+  0xDB: ["ADDB n", 1]
+  0xDC: ["LDD n", 1]
+  0xDD: ["STD n", 1]
+  0xDE: ["LDU n", 1]
+  0xDF: ["STU n", 1]
+
+  # --- B indexed (0xE0-0xEF) ---
+  0xE0: ["SUBB idx", idx]
+  0xE1: ["CMPB idx", idx]
+  0xE2: ["SBCB idx", idx]
+  0xE3: ["ADDD idx", idx]
+  0xE4: ["ANDB idx", idx]
+  0xE5: ["BITB idx", idx]
+  0xE6: ["LDB idx", idx]
+  0xE7: ["STB idx", idx]
+  0xE8: ["EORB idx", idx]
+  0xE9: ["ADCB idx", idx]
+  0xEA: ["ORB idx", idx]
+  0xEB: ["ADDB idx", idx]
+  0xEC: ["LDD idx", idx]
+  0xED: ["STD idx", idx]
+  0xEE: ["LDU idx", idx]
+  0xEF: ["STU idx", idx]
+
+  # --- B extended (0xF0-0xFF) ---
+  0xF0: ["SUBB nn", 2]
+  0xF1: ["CMPB nn", 2]
+  0xF2: ["SBCB nn", 2]
+  0xF3: ["ADDD nn", 2]
+  0xF4: ["ANDB nn", 2]
+  0xF5: ["BITB nn", 2]
+  0xF6: ["LDB nn", 2]
+  0xF7: ["STB nn", 2]
+  0xF8: ["EORB nn", 2]
+  0xF9: ["ADCB nn", 2]
+  0xFA: ["ORB nn", 2]
+  0xFB: ["ADDB nn", 2]
+  0xFC: ["LDD nn", 2]
+  0xFD: ["STD nn", 2]
+  0xFE: ["LDU nn", 2]
+  0xFF: ["STU nn", 2]
+
+# --- Page 2 (prefix 0x10) ---
+prefix_groups:
+  page2:
+    prefix: [0x10]
+    opcodes:
+      0x21: ["LBRN ee", 2]
+      0x22: ["LBHI ee", 2, cond_branch]
+      0x23: ["LBLS ee", 2, cond_branch]
+      0x24: ["LBCC ee", 2, cond_branch]
+      0x25: ["LBCS ee", 2, cond_branch]
+      0x26: ["LBNE ee", 2, cond_branch]
+      0x27: ["LBEQ ee", 2, cond_branch]
+      0x28: ["LBVC ee", 2, cond_branch]
+      0x29: ["LBVS ee", 2, cond_branch]
+      0x2A: ["LBPL ee", 2, cond_branch]
+      0x2B: ["LBMI ee", 2, cond_branch]
+      0x2C: ["LBGE ee", 2, cond_branch]
+      0x2D: ["LBLT ee", 2, cond_branch]
+      0x2E: ["LBGT ee", 2, cond_branch]
+      0x2F: ["LBLE ee", 2, cond_branch]
+      0x3F: ["SWI2", 0]
+      0x83: ["CMPD #nn", 2]
+      0x8C: ["CMPY #nn", 2]
+      0x8E: ["LDY #nn", 2]
+      0x93: ["CMPD n", 1]
+      0x9C: ["CMPY n", 1]
+      0x9E: ["LDY n", 1]
+      0x9F: ["STY n", 1]
+      0xA3: ["CMPD idx", idx]
+      0xAC: ["CMPY idx", idx]
+      0xAE: ["LDY idx", idx]
+      0xAF: ["STY idx", idx]
+      0xB3: ["CMPD nn", 2]
+      0xBC: ["CMPY nn", 2]
+      0xBE: ["LDY nn", 2]
+      0xBF: ["STY nn", 2]
+      0xCE: ["LDS #nn", 2]
+      0xDE: ["LDS n", 1]
+      0xDF: ["STS n", 1]
+      0xEE: ["LDS idx", idx]
+      0xEF: ["STS idx", idx]
+      0xFE: ["LDS nn", 2]
+      0xFF: ["STS nn", 2]
+
+  page3:
+    prefix: [0x11]
+    opcodes:
+      0x3F: ["SWI3", 0]
+      0x83: ["CMPU #nn", 2]
+      0x8C: ["CMPS #nn", 2]
+      0x93: ["CMPU n", 1]
+      0x9C: ["CMPS n", 1]
+      0xA3: ["CMPU idx", idx]
+      0xAC: ["CMPS idx", idx]
+      0xB3: ["CMPU nn", 2]
+      0xBC: ["CMPS nn", 2]

@@ -6,19 +6,22 @@ export interface CpuDef {
     endian: "little" | "big";
   };
   register_sets?: Record<string, string[]>;
+  operand_types?: Record<string, RawOperandTypeDef>;
   opcodes: Record<string, OpcodeDef>;
   patterns?: PatternDef[];
   prefix_groups?: Record<string, PrefixGroupDef>;
 }
 
-// [template, operand_bytes] or [template, operand_bytes, flow_type]
+// [template, operand_bytes_or_type] or [template, operand_bytes_or_type, flow_type]
 export type OpcodeDef =
   | [string, number]
-  | [string, number, string];
+  | [string, number, string]
+  | [string, string]
+  | [string, string, string];
 
 export interface PatternDef {
   range: [number, number];
-  template: string;        // e.g. "LD {r8:5-3},{r8:2-0}"
+  template: string;
   operand_bytes?: number;
   flow?: string;
   exclude?: Record<string, OpcodeDef>;
@@ -31,6 +34,47 @@ export interface PrefixGroupDef {
   has_displacement?: boolean;
 }
 
+// Raw YAML operand type definitions (before parsing)
+export type RawOperandTypeDef = Record<string, unknown>;
+
+// --- Resolved operand type definitions ---
+
+export type OperandTypeDef = IndexedOperandDef | RegisterPairDef | RegisterListDef;
+
+export interface IndexedOperandDef {
+  kind: "indexed";
+  registers: string[];
+  indirectBit: number;
+  shortOffset: {
+    registerBits: [number, number];
+    offsetBits: [number, number];
+    signed: boolean;
+  };
+  modes: Map<number, IndexedModeDef>;
+}
+
+export interface IndexedModeDef {
+  format: string;
+  extra: number;
+  noIndirect?: boolean;
+  indirectOnly?: boolean;
+  noRegister?: boolean;
+}
+
+export interface RegisterPairDef {
+  kind: "register_pair";
+  registers: Map<string, number>;  // name → code
+  reverseMap: Map<number, string>; // code → name
+  sourceBits: [number, number];
+  destBits: [number, number];
+}
+
+export interface RegisterListDef {
+  kind: "register_list";
+  bits: Map<number, string>;  // bit position → register name
+  reverseMap: Map<string, number>; // name → bit position
+}
+
 // --- Resolved runtime types ---
 
 export interface CpuModel {
@@ -41,6 +85,7 @@ export interface CpuModel {
   prefixTables: Map<number, PrefixTable>;
   prefixBytes: Set<number>;
   assemblyIndex: Map<string, AssemblyEntry[]>;
+  operandTypes: Map<string, OperandTypeDef>;
 }
 
 export interface PrefixTable {
@@ -54,12 +99,14 @@ export interface ResolvedInstruction {
   operandBytes: number;
   encoding: number[];
   flow?: string;
+  customOperands?: string[];  // names of operand_types in this template
 }
 
 export interface AssemblyEntry {
   encoding: number[];
   operandBytes: number;
   template: string;
+  customOperands?: string[];
 }
 
 // --- Disassembly output ---
