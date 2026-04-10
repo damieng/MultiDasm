@@ -143,6 +143,21 @@ function matchTemplate(
       i += 1;
       continue;
     }
+    // $hex literal (e.g., $00 in RST templates)
+    if (template[i] === "$") {
+      const hexStart = i + 1;
+      let hexEnd = hexStart;
+      while (hexEnd < template.length && /[0-9a-fA-F]/.test(template[hexEnd]!)) {
+        hexEnd++;
+      }
+      if (hexEnd > hexStart) {
+        const hexVal = parseInt(template.substring(hexStart, hexEnd), 16);
+        pattern += "([^\\s,()]+)";
+        captureTypes.push("hex:" + hexVal);
+        i = hexEnd;
+        continue;
+      }
+    }
     if ("()[]{}.*+?^$\\|".includes(template[i]!)) {
       pattern += "\\" + template[i];
     } else {
@@ -166,6 +181,13 @@ function matchTemplate(
 
       if (type.startsWith("custom:")) {
         customCaptures.push({ name: type.slice(7), text: raw });
+        continue;
+      }
+
+      if (type.startsWith("hex:")) {
+        const expectedVal = parseInt(type.slice(4));
+        const val = parseValue(raw, labels);
+        if (val === null || val !== expectedVal) return null;
         continue;
       }
 

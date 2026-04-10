@@ -384,6 +384,7 @@ prefix_groups:
       - { range: [0x1E, 0x1E], template: "RR (IX+d)", operand_bytes: 0 }
       - { range: [0x26, 0x26], template: "SLA (IX+d)", operand_bytes: 0 }
       - { range: [0x2E, 0x2E], template: "SRA (IX+d)", operand_bytes: 0 }
+      - { range: [0x36, 0x36], template: "SLL (IX+d)", operand_bytes: 0 }
       - { range: [0x3E, 0x3E], template: "SRL (IX+d)", operand_bytes: 0 }
     opcodes:
       0x46: ["BIT 0,(IX+d)", 0]
@@ -421,6 +422,7 @@ prefix_groups:
       - { range: [0x1E, 0x1E], template: "RR (IY+d)", operand_bytes: 0 }
       - { range: [0x26, 0x26], template: "SLA (IY+d)", operand_bytes: 0 }
       - { range: [0x2E, 0x2E], template: "SRA (IY+d)", operand_bytes: 0 }
+      - { range: [0x36, 0x36], template: "SLL (IY+d)", operand_bytes: 0 }
       - { range: [0x3E, 0x3E], template: "SRL (IY+d)", operand_bytes: 0 }
     opcodes:
       0x46: ["BIT 0,(IY+d)", 0]

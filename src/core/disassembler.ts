@@ -314,6 +314,20 @@ function decodeOne(data: Uint8Array, offset: number, model: CpuModel): DecodeRes
         return { instr, operandBytes: opBytes, instrLen: prefixOpcodeLen + instr.operandBytes };
       }
     }
+
+    // Prefix byte present but no prefixed opcode matched.
+    // On real hardware, the prefix is silently ignored.
+    // Try decoding from offset+1 as a normal instruction.
+    const fallback = decodeOne(data, offset + 1, model);
+    if (fallback) {
+      return {
+        instr: fallback.instr,
+        operandBytes: fallback.operandBytes,
+        instrLen: fallback.instrLen + 1,
+        displacement: fallback.displacement,
+        customTexts: fallback.customTexts,
+      };
+    }
   }
 
   // regular opcode (1 or 2 byte width)
