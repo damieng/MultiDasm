@@ -420,7 +420,7 @@ export function disassemble(
       const flow = instr.flow;
 
       let branchTarget: number | undefined;
-      if (flow) {
+      if (flow && flow !== "indirect") {
         branchTarget = computeBranchTarget(instr.template, operandBytes, currentAddr, instrLen, model.endian);
       }
 

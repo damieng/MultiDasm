@@ -32,6 +32,14 @@ function parseLine(raw: string, lineNum: number): Line {
     return result;
   }
 
+  const equMatch = line.match(/^([a-zA-Z_]\w*)\s+\.?(EQU)\s+(.*)$/i);
+  if (equMatch) {
+    result.label = equMatch[1];
+    result.directive = equMatch[2]!.toUpperCase();
+    result.directiveArg = equMatch[3]?.trim() ?? "";
+    return result;
+  }
+
   const parts = line.match(/^(\S+)\s*(.*)$/);
   if (parts) {
     result.mnemonic = parts[1]!.toUpperCase();
@@ -338,6 +346,11 @@ export function assemble(source: string, model: CpuModel): AssembleResult {
     if (line.directive === "ORG") {
       const val = parseValue(line.directiveArg ?? "0", labels);
       if (val !== null) { pc = val; origin = val; }
+      continue;
+    }
+    if (line.directive === "EQU") {
+      const val = parseValue(line.directiveArg ?? "0", labels);
+      if (line.label && val !== null) labels.set(line.label, val);
       continue;
     }
     if (line.label) labels.set(line.label, pc);
